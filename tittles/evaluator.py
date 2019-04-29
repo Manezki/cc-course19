@@ -1,38 +1,54 @@
 import cmudict
 import pickle
 import os
+import csv
+from operator import add
+import math
 
 class Evaluator():
     def __init__(self):
+        self.emotions = ['anger', 'disgust', 'fear', 'happiness', 'sadness', 'surprise']
+
         self.cmudict = cmudict.dict()
 
         self.title_bank = None
         self.folder = os.path.dirname(os.path.realpath(__file__))
 
         # Try reading content for the title_bank
-        
+
         try:
             with open(os.path.join(self.folder, "data", "titles.pickle"), "rb") as f:
                 self.title_bank = pickle.load(f)
-        
+
         except FileNotFoundError:
             from title_scrape import download_gutenberg, gutenberg_preprocess
-        
+
             download_gutenberg()
             gutenberg_preprocess()
-        
+
             with open(os.path.join(self.folder, "data", "titles.pickle"), "rb") as f:
                 self.title_bank = pickle.load(f)
-
+        #Read content for the sentiment dictionary
+        self.sentimentDictionary = {}
+        with open(os.path.join(self.folder, "data", "EmotionLexicon.txt")) as emotionLexicon:
+            lexicon = csv.reader(emotionLexicon, delimiter='\t')
+            word = ""
+            values = {}
+            for row in lexicon:
+                if word != row[0]:
+                    self.sentimentDictionary[word] = values
+                    word = row[0]
+                    values = {}
+                values[row[1]] = row[2]
 
     # Modified from https://www.python-course.eu/levenshtein_distance.php
     def __iterative_levenshtein(self, s, t, weights=(1, 1, 1)):
-        """ 
+        """
         iterative_levenshtein(s, t) -> ldist
-        ldist is the Levenshtein distance between the strings 
+        ldist is the Levenshtein distance between the strings
         s and t.
-        For all i and j, dist[i,j] will contain the Levenshtein 
-        distance between the first i characters of s and the 
+        For all i and j, dist[i,j] will contain the Levenshtein
+        distance between the first i characters of s and the
         first j characters of t
 
         weight_dict: keyword parameters setting the costs for characters,
@@ -43,7 +59,7 @@ class Evaluator():
 
 
         dist = [[0 for x in range(cols)] for x in range(rows)]
-        # source prefixes can be transformed into empty strings 
+        # source prefixes can be transformed into empty strings
         # by deletions:
         for row in range(1, rows):
             dist[row][0] = dist[row-1][0] + weights[0]
@@ -99,9 +115,9 @@ class Evaluator():
 
         return closest
 
-    def evaluate(self, title):
+    def evaluate(self, title, emotion):
         """Runs the different evaluation schemes, which return values between 0 and 1, and returns an average over them.
-        
+
         Args:
             title (list) : list of words forming the title when.
 
@@ -111,7 +127,8 @@ class Evaluator():
         val = 0
         val += self.eval_novelty(" ".join(title))
         val += self.eval_alliteration(title)
-        return val / 2.0
+        val += self.eval_sentiment(title, emotion)
+        return val / 3.0
 
 
     def eval_novelty(self, title):
@@ -146,3 +163,30 @@ class Evaluator():
         title are non-unique, otherwise it grows close to 0
         """
         return (-4*(ratio-0.5))**2 + 1
+
+    def eval_sentiment(self, title, emotion):
+        """
+        Builds a vector of emotions in the title and compares that vector to the emotion in the input
+        Each word gets a weight of 1/n, where n is the number of words in the title
+        """
+        self.emotions = ['anger', 'disgust', 'fear', 'happiness', 'sadness', 'surprise']
+        goal_sentiment = list(map(lambda x: int(x == emotion), self.emotions))
+        self.emotions = ['anger', 'disgust', 'fear', 'joy', 'sadness', 'surprise']
+        title_sentiment = [0, 0, 0, 0, 0, 0]
+        for word in title:
+            sentiments = self.sentimentDictionary.get(word.lower(), None)
+            if sentiments is not None:
+                word_sentiment = list(map(lambda x: int(sentiments[x]), self.emotions))
+                title_sentiment = list(map(add, title_sentiment, word_sentiment))
+        title_sentiment = list(map(lambda x: x/len(title), title_sentiment))
+        return self.get_sentiment_vector_diff(goal_sentiment, title_sentiment)
+
+    def get_sentiment_vector_diff(self, goal, sentiment):
+        """
+        Take squared difference of vectors
+        """
+        diff = 0
+        for i in range(len(self.emotions)):
+            diff += (goal[i] - sentiment[i])**2
+        #Normalize to range 0-1 and take complement, since small difference is good
+        return 1 - math.sqrt(diff)/math.sqrt(6)
