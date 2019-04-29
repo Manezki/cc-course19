@@ -16,6 +16,10 @@ try:
     from .wordpicker import WordPicker
 except ModuleNotFoundError:
     from wordpicker import WordPicker
+try:
+    from . import thesaurus
+except ImportError:
+    import thesaurus
 
 class tittlesTitle():
     def __init__(self):
