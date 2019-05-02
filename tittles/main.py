@@ -16,6 +16,10 @@ try:
     from .wordpicker import WordPicker
 except ModuleNotFoundError:
     from wordpicker import WordPicker
+try:
+    from . import thesaurus
+except ImportError:
+    import thesaurus
 
 class tittlesTitle():
     def __init__(self):
@@ -43,7 +47,7 @@ class tittlesTitle():
         Returns:
             Float [0, 1] : How good the title was - high being better.
         """
-        return self.evaluator.evaluate(title.split(" "))
+        return self.evaluator.evaluate(title.split(" "), self.emotion)
 
     def inject(self, title, word_pair):
         for i, cat in title.get_slots('NP'):
@@ -82,6 +86,8 @@ class tittlesTitle():
             should be a dictionary holding at least 'evaluation' keyword with float value.
 
         """
+
+        self.emotion = emotion
 
         ret = []
 
