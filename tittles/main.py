@@ -2,6 +2,10 @@ import os
 import pickle
 from pattern.en import pluralize, singularize
 
+import logging
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+logger = logging.getLogger(__name__)
+
 try:
     from .templates import TemplateBank, Title
 except ModuleNotFoundError:
@@ -97,6 +101,8 @@ class tittlesTitle():
         subsequent_catches = 0
 
         while len(ret) != number_of_artifacts:
+            logger.debug('generate new title')
+
             adjectives = (list(word_pair[1] for word_pair in word_pairs if word_pair[0] == 'animal'), list(word_pair[1] for word_pair in word_pairs if word_pair[0] == 'human'))
             weather = dict(word_pairs)['weather']
             activity = dict(word_pairs)['activity']
@@ -104,7 +110,7 @@ class tittlesTitle():
 
             template = self.template_bank.random_template()
             title = Title(template)
-            
+
             try:
                 word_pair = self.find_words(adjectives, activity, location, weather, title.list_slots())
                 subsequent_catches = 0
@@ -115,12 +121,15 @@ class tittlesTitle():
                     raise AttributeNotFound("Input attributes cannot be found from Thesaurus Rex.")
 
             self.inject(title, word_pair)
+            logger.debug('final title: ' + str(title))
 
             phenotype = str(title)
             v = self.evaluate(phenotype)
             if v >= self.threshold:
                 ret.append((phenotype, {"evaluation": v}))
                 self.evaluator.add_title(phenotype)
+            else:
+                logger.debug('evaluation below threshold')
 
         # Comment out if you want to keep the original titles
         self.evaluator.dump_titles()
